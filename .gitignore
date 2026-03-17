@@ -1,0 +1,22 @@
+# ===== Go build =====
+bin/
+build/
+dist/
+*.exe
+*.out
+*.test
+
+# ===== GoLand / IntelliJ =====
+.idea/
+*.iml
+
+# ===== OS =====
+.DS_Store
+Thumbs.db
+
+# ===== logs =====
+*.log
+
+# ===== env =====
+.env
+.env.*
