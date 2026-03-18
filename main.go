@@ -39,6 +39,21 @@ func main() {
 					return nil
 				}
 
+				// 👇 拦截 /start 命令
+				if msg.Message == "/start" {
+					_, err := bot.sender.Answer(e, u).Text(ctx,
+						"👋 欢迎使用本机器人！\n\n"+
+							"📖 使用说明：\n"+
+							"直接发送 Telegram 消息链接即可转发内容。\n\n"+
+							"支持的链接格式：\n"+
+							"• https://t.me/频道名/消息ID\n"+
+							"• https://t.me/频道名/消息ID?single （如果带有single只获取单条，不含相册）\n\n"+
+							"示例：\n"+
+							"https://t.me/durov/123",
+					)
+					return err
+				}
+
 				taskCtx := context.WithoutCancel(ctx)
 				go func() {
 					defer func() {
