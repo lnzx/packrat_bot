@@ -95,7 +95,7 @@ func NewBot(api *tg.Client) *Bot {
 
 func (b *Bot) handleForwardRequest(ctx context.Context, e tg.Entities, u *tg.UpdateNewMessage) error {
 	// 1. 解析链接
-	channelUsername, msgID, single, err := parseTelegramLink(u.Message.(*tg.Message).Message)
+	channelUsername, msgID, err := parseTelegramLink(u.Message.(*tg.Message).Message)
 	if err != nil {
 		// 👇 新增：解析失败时，告诉用户链接格式不对
 		_, _ = b.sender.Answer(e, u).Text(ctx, "解析失败，请发送正确的 Telegram 消息链接！")
@@ -132,7 +132,7 @@ func (b *Bot) handleForwardRequest(ctx context.Context, e tg.Entities, u *tg.Upd
 	// -----------------------------------------
 	// 第一步：先抓“相册/图集”这个特殊情况 (最复杂的边界情况)
 	// -----------------------------------------
-	if targetMsg.GroupedID != 0 && !single {
+	if targetMsg.GroupedID != 0 {
 		return b.handleAlbum(ctx, e, u, channelPeer, targetMsg)
 	}
 
@@ -189,6 +189,8 @@ func (b *Bot) unpackFirstMessage(res tg.MessagesMessagesClass) (*tg.Message, err
 
 func (b *Bot) handleMedia(ctx context.Context, e tg.Entities, u *tg.UpdateNewMessage, targetMsg *tg.Message) error {
 	var mediaOption message.MediaOption
+	caption := styling.Plain(targetMsg.Message)
+
 	switch media := targetMsg.Media.(type) {
 	case *tg.MessageMediaPhoto:
 		// 图片属于 Photo
@@ -196,7 +198,7 @@ func (b *Bot) handleMedia(ctx context.Context, e tg.Entities, u *tg.UpdateNewMes
 		if !ok {
 			return fmt.Errorf("无法解析 Photo 类型")
 		}
-		mediaOption = message.Photo(photo.AsInput(), styling.Plain(targetMsg.Message))
+		mediaOption = message.Photo(photo.AsInput(), caption)
 	case *tg.MessageMediaDocument:
 		// 视频、GIF、普通文件都属于 Document
 		doc, ok := media.Document.(*tg.Document)
@@ -204,7 +206,7 @@ func (b *Bot) handleMedia(ctx context.Context, e tg.Entities, u *tg.UpdateNewMes
 			return fmt.Errorf("无法解析 Document 类型")
 		}
 		// 使用 message.Document 包装底层 ID
-		mediaOption = message.Document(doc.AsInput(), styling.Plain(targetMsg.Message))
+		mediaOption = message.Document(doc.AsInput(), caption)
 	default:
 		_, _ = b.sender.Answer(e, u).Text(ctx, "❌ 暂不支持抓取该类型的媒体 (例如投票、位置等)。")
 		return fmt.Errorf("不支持的媒体类型: %T", targetMsg.Media)
@@ -279,16 +281,16 @@ func (b *Bot) handleAlbum(ctx context.Context, e tg.Entities, u *tg.UpdateNewMes
 	return err
 }
 
-func parseTelegramLink(link string) (string, int, bool, error) {
+func parseTelegramLink(link string) (string, int, error) {
 	u, err := url.Parse(link)
 	if err != nil {
-		return "", 0, false, err
+		return "", 0, err
 	}
 
 	host := strings.ToLower(u.Host)
 
 	if host != "t.me" && host != "www.t.me" && host != "telegram.me" {
-		return "", 0, false, fmt.Errorf("invalid host")
+		return "", 0, fmt.Errorf("invalid host")
 	}
 
 	// 清理 path
@@ -302,17 +304,15 @@ func parseTelegramLink(link string) (string, int, bool, error) {
 	}
 
 	if len(parts) < 2 {
-		return "", 0, false, fmt.Errorf("invalid path")
+		return "", 0, fmt.Errorf("invalid path")
 	}
 
 	channel := parts[0]
 
 	id, err := strconv.Atoi(parts[1])
 	if err != nil {
-		return "", 0, false, fmt.Errorf("invalid message id")
+		return "", 0, fmt.Errorf("invalid message id")
 	}
 
-	// 解析 ?single 参数
-	_, single := u.Query()["single"]
-	return channel, id, single, nil
+	return channel, id, nil
 }
