@@ -80,7 +80,7 @@ func NewBot(api *tg.Client) *Bot {
 
 func (b *Bot) handleForwardRequest(ctx context.Context, e tg.Entities, u *tg.UpdateNewMessage) error {
 	// 1. 解析链接
-	channelUsername, msgID, err := parseTelegramLink(u.Message.(*tg.Message).Message)
+	channelUsername, msgID, single, err := parseTelegramLink(u.Message.(*tg.Message).Message)
 	if err != nil {
 		// 👇 新增：解析失败时，告诉用户链接格式不对
 		_, _ = b.sender.Answer(e, u).Text(ctx, "解析失败，请发送正确的 Telegram 消息链接！")
@@ -117,7 +117,7 @@ func (b *Bot) handleForwardRequest(ctx context.Context, e tg.Entities, u *tg.Upd
 	// -----------------------------------------
 	// 第一步：先抓“相册/图集”这个特殊情况 (最复杂的边界情况)
 	// -----------------------------------------
-	if targetMsg.GroupedID != 0 {
+	if targetMsg.GroupedID != 0 && !single {
 		return b.handleAlbum(ctx, e, u, channelPeer, targetMsg)
 	}
 
@@ -264,16 +264,16 @@ func (b *Bot) handleAlbum(ctx context.Context, e tg.Entities, u *tg.UpdateNewMes
 	return err
 }
 
-func parseTelegramLink(link string) (string, int, error) {
+func parseTelegramLink(link string) (string, int, bool, error) {
 	u, err := url.Parse(link)
 	if err != nil {
-		return "", 0, err
+		return "", 0, false, err
 	}
 
 	host := strings.ToLower(u.Host)
 
 	if host != "t.me" && host != "www.t.me" && host != "telegram.me" {
-		return "", 0, fmt.Errorf("invalid host")
+		return "", 0, false, fmt.Errorf("invalid host")
 	}
 
 	// 清理 path
@@ -287,15 +287,17 @@ func parseTelegramLink(link string) (string, int, error) {
 	}
 
 	if len(parts) < 2 {
-		return "", 0, fmt.Errorf("invalid path")
+		return "", 0, false, fmt.Errorf("invalid path")
 	}
 
 	channel := parts[0]
 
 	id, err := strconv.Atoi(parts[1])
 	if err != nil {
-		return "", 0, fmt.Errorf("invalid message id")
+		return "", 0, false, fmt.Errorf("invalid message id")
 	}
 
-	return channel, id, nil
+	// 解析 ?single 参数
+	_, single := u.Query()["single"]
+	return channel, id, single, nil
 }
